@@ -1,0 +1,11 @@
+{
+  "status": "passed",
+  "uid": "10001",
+  "read_only_root": true,
+  "capabilities_dropped": true,
+  "unauthenticated_mutation_and_reads": 401,
+  "authenticated_mutation": 201,
+  "authenticated_reads": 200,
+  "public_health": 200,
+  "token": "ephemeral test token; not retained"
+}

@@ -1,0 +1,157 @@
+{
+  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "revision": "989aa7980e4cf806f80c7fef2b1adb7bc71aa306",
+  "prompt": "choices",
+  "device": "cpu",
+  "python": "3.12.14",
+  "torch": "2.5.1+cpu",
+  "method": "constrained candidate-label scoring, not a free-form agent",
+  "cases": 9,
+  "correct": 9,
+  "dataset": "dev",
+  "dataset_sha256": "a1ffe24d0252783563166cc628bf8cdef97dde2d46ad62fc4d0f19f4d52b0042",
+  "elapsed_seconds": 30.15372488799767,
+  "scope": "Synthetic local integration evaluation, not production accuracy or calibrated confidence.",
+  "results": [
+    {
+      "ticket_id": "T01",
+      "text": "I was charged twice for this month's subscription.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.00018726025882642716,
+        "access": -8.742927551269531,
+        "other": -10.626241683959961
+      },
+      "validated": true,
+      "prediction_seconds": 2.245487536994915
+    },
+    {
+      "ticket_id": "T02",
+      "text": "My payment failed although my card is valid.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.0003446938644628972,
+        "access": -8.31391429901123,
+        "other": -10.478882789611816
+      },
+      "validated": true,
+      "prediction_seconds": 2.185948592996283
+    },
+    {
+      "ticket_id": "T03",
+      "text": "Please send a copy of the invoice for my last payment.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -2.992108420585282e-05,
+        "access": -10.989279747009277,
+        "other": -12.705809593200684
+      },
+      "validated": true,
+      "prediction_seconds": 2.40221662499971
+    },
+    {
+      "ticket_id": "T04",
+      "text": "I forgot my password and cannot sign in.",
+      "expected": "access",
+      "predicted": "access",
+      "mean_log_probabilities": {
+        "billing": -5.873062610626221,
+        "access": -0.002970332745462656,
+        "other": -8.981127738952637
+      },
+      "validated": true,
+      "prediction_seconds": 2.163635910001176
+    },
+    {
+      "ticket_id": "T05",
+      "text": "My login verification code never arrives.",
+      "expected": "access",
+      "predicted": "access",
+      "mean_log_probabilities": {
+        "billing": -3.6371774673461914,
+        "access": -0.03489388898015022,
+        "other": -4.905770301818848
+      },
+      "validated": true,
+      "prediction_seconds": 2.169930773001397
+    },
+    {
+      "ticket_id": "T06",
+      "text": "My account is locked after several sign-in attempts.",
+      "expected": "access",
+      "predicted": "access",
+      "mean_log_probabilities": {
+        "billing": -4.274505615234375,
+        "access": -0.02611929178237915,
+        "other": -4.442317962646484
+      },
+      "validated": true,
+      "prediction_seconds": 2.209756613992795
+    },
+    {
+      "ticket_id": "T07",
+      "text": "Could you add a dark theme to the dashboard?",
+      "expected": "other",
+      "predicted": "other",
+      "mean_log_probabilities": {
+        "billing": -7.1415324211120605,
+        "access": -6.153146266937256,
+        "other": -0.0034477810841053724
+      },
+      "validated": true,
+      "prediction_seconds": 2.278244752997125
+    },
+    {
+      "ticket_id": "T08",
+      "text": "Where can I read the documentation about exporting reports?",
+      "expected": "other",
+      "predicted": "other",
+      "mean_log_probabilities": {
+        "billing": -9.438410758972168,
+        "access": -6.136073112487793,
+        "other": -0.0023223592434078455
+      },
+      "validated": true,
+      "prediction_seconds": 2.2534280479958397
+    },
+    {
+      "ticket_id": "T09",
+      "text": "The chart colours are difficult to distinguish.",
+      "expected": "other",
+      "predicted": "other",
+      "mean_log_probabilities": {
+        "billing": -1.6568849086761475,
+        "access": -4.514174938201904,
+        "other": -0.23023580014705658
+      },
+      "validated": true,
+      "prediction_seconds": 2.5310427759977756
+    }
+  ],
+  "confusion_matrix": {
+    "billing": {
+      "billing": 3,
+      "access": 0,
+      "other": 0
+    },
+    "access": {
+      "billing": 0,
+      "access": 3,
+      "other": 0
+    },
+    "other": {
+      "billing": 0,
+      "access": 0,
+      "other": 3
+    }
+  },
+  "per_class_f1": {
+    "billing": 1.0,
+    "access": 1.0,
+    "other": 1.0
+  },
+  "macro_f1": 1.0
+}

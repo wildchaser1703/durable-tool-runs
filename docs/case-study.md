@@ -1,5 +1,8 @@
 # The action succeeded. The worker disappeared.
 
+This is the v0.2 case study. See [v0.3 hardening and model evaluation](hardening.md)
+for subsequent authentication, submission deduplication, reconciliation and tests.
+
 A tool can commit an action and lose its response before a worker saves success.
 Retrying without a stable key can duplicate the action; refusing every retry can
 leave recoverable work stuck. This project makes that failure boundary observable

@@ -1,6 +1,6 @@
 [project]
 name = "durable-tool-runs"
-version = "0.2.0"
+version = "0.3.0"
 description = "A recoverable execution service for durable tool runs."
 requires-python = ">=3.11"
 dependencies = [
@@ -22,6 +22,7 @@ include = ["app*", "examples*"]
 
 [tool.setuptools.package-data]
 app = ["static/*"]
+examples = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -10,7 +10,16 @@ class Base(DeclarativeBase):
 
 class Database:
     def __init__(self, url: str):
-        self.engine = create_engine(url, future=True, pool_pre_ping=True)
+        self.engine = create_engine(
+            url,
+            future=True,
+            pool_pre_ping=True,
+            pool_timeout=5,
+            connect_args={
+                "connect_timeout": 5,
+                "options": "-c statement_timeout=15000 -c lock_timeout=5000",
+            },
+        )
         self.sessions = sessionmaker(
             self.engine, expire_on_commit=False, class_=Session
         )

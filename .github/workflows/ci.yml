@@ -37,6 +37,8 @@ jobs:
           POSTGRES_PORT: "5434"
       - name: Verify a real two-step run, event cursor and metrics
         run: python scripts/smoke.py
+      - name: Verify concurrent submissions and deduplicated runs
+        run: python scripts/load_check.py --runs 12 --concurrency 4 --output /tmp/concurrency.json
       - name: Tear down stack
         if: always()
         run: docker compose down -v

@@ -27,6 +27,8 @@ class Run(Base):
     __tablename__ = "runs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    request_key: Mapped[str | None] = mapped_column(String(128), unique=True)
+    request_hash: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="queued", index=True
     )

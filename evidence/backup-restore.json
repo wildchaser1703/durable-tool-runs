@@ -1,0 +1,11 @@
+{
+  "postgres_restore": "passed",
+  "table_counts_and_row_hashes": {
+    "runs": "99|26ec9dea735d3e917541b618189c66a8",
+    "steps": "160|6f5d567441d6a8bec1b5a7127be71cd2",
+    "run_events": "576|4b4e3f4fe0178ad06bdb4119e94ad64a"
+  },
+  "provider_backup_integrity": "ok",
+  "provider_effects": 153,
+  "scope": "Database restored into disposable isolated database; live database unchanged; backups retained outside source repository"
+}

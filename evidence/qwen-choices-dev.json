@@ -1,0 +1,134 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+  "prompt": "choices",
+  "device": "cpu",
+  "python": "3.12.14",
+  "torch": "2.5.1+cpu",
+  "method": "constrained candidate-label scoring, not a free-form agent",
+  "cases": 9,
+  "correct": 5,
+  "dataset": "dev",
+  "dataset_sha256": "a1ffe24d0252783563166cc628bf8cdef97dde2d46ad62fc4d0f19f4d52b0042",
+  "elapsed_seconds": 16.87055696400057,
+  "scope": "Synthetic local integration evaluation, not production accuracy or calibrated confidence.",
+  "results": [
+    {
+      "ticket_id": "T01",
+      "text": "I was charged twice for this month's subscription.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.4997503459453583,
+        "access": -0.9816114902496338,
+        "other": -4.005716323852539
+      },
+      "validated": true,
+      "prediction_seconds": 0.9917830129998038
+    },
+    {
+      "ticket_id": "T02",
+      "text": "My payment failed although my card is valid.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.3656846880912781,
+        "access": -1.2529585361480713,
+        "other": -3.910637140274048
+      },
+      "validated": true,
+      "prediction_seconds": 1.0104396960014128
+    },
+    {
+      "ticket_id": "T03",
+      "text": "Please send a copy of the invoice for my last payment.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.5093339681625366,
+        "access": -0.9786123037338257,
+        "other": -3.7880911827087402
+      },
+      "validated": true,
+      "prediction_seconds": 1.0177445309964241
+    },
+    {
+      "ticket_id": "T04",
+      "text": "I forgot my password and cannot sign in.",
+      "expected": "access",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.7825253009796143,
+        "access": -0.972977876663208,
+        "other": -1.8050339221954346
+      },
+      "validated": true,
+      "prediction_seconds": 1.0576493889966514
+    },
+    {
+      "ticket_id": "T05",
+      "text": "My login verification code never arrives.",
+      "expected": "access",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.3219142556190491,
+        "access": -1.6935572624206543,
+        "other": -2.397407054901123
+      },
+      "validated": true,
+      "prediction_seconds": 0.9300304600037634
+    },
+    {
+      "ticket_id": "T06",
+      "text": "My account is locked after several sign-in attempts.",
+      "expected": "access",
+      "predicted": "access",
+      "mean_log_probabilities": {
+        "billing": -2.115279197692871,
+        "access": -0.5406407713890076,
+        "other": -1.2146520614624023
+      },
+      "validated": true,
+      "prediction_seconds": 1.0193381729986868
+    },
+    {
+      "ticket_id": "T07",
+      "text": "Could you add a dark theme to the dashboard?",
+      "expected": "other",
+      "predicted": "access",
+      "mean_log_probabilities": {
+        "billing": -1.055392861366272,
+        "access": -1.010287880897522,
+        "other": -1.2475868463516235
+      },
+      "validated": true,
+      "prediction_seconds": 0.9054458440004964
+    },
+    {
+      "ticket_id": "T08",
+      "text": "Where can I read the documentation about exporting reports?",
+      "expected": "other",
+      "predicted": "other",
+      "mean_log_probabilities": {
+        "billing": -3.5222620964050293,
+        "access": -2.2823100090026855,
+        "other": -0.14474239945411682
+      },
+      "validated": true,
+      "prediction_seconds": 0.8892456859975937
+    },
+    {
+      "ticket_id": "T09",
+      "text": "The chart colours are difficult to distinguish.",
+      "expected": "other",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -0.2787170708179474,
+        "access": -1.8956184387207031,
+        "other": -2.3828201293945312
+      },
+      "validated": true,
+      "prediction_seconds": 0.7778580320009496
+    }
+  ]
+}

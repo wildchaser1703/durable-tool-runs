@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
-import time
+import signal
+import threading
 from uuid import uuid4
 
 from prometheus_client import start_http_server
@@ -40,16 +42,20 @@ def main() -> None:
     if args.once:
         worker.run_once()
         return
-    while True:
+    stop = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.set())
+    while not stop.is_set():
         try:
             outcome = worker.run_once()
         except OperationalError:
             # A database restart must not permanently remove a worker from the
             # pool. The lease protocol handles any work it had previously held.
-            time.sleep(1)
+            logging.getLogger(__name__).warning("database unavailable; retrying")
+            stop.wait(1)
             continue
         if not outcome:
-            time.sleep(0.25)
+            stop.wait(0.25)
 
 
 if __name__ == "__main__":

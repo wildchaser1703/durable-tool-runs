@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 import random
@@ -12,6 +14,7 @@ from uuid import uuid4
 
 import httpx
 from sqlalchemy import and_, exists, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import aliased
 
@@ -30,6 +33,10 @@ class ToolExecutionError(RuntimeError):
 
 class RetryableToolError(RuntimeError):
     """The remote outcome may be unknown; replay later with the same key."""
+
+
+class IdempotencyConflict(ValueError):
+    """A submission key cannot identify two different requests."""
 
 
 def event(
@@ -64,7 +71,7 @@ class RecordTool:
             raise RetryableToolError(
                 f"provider transport outcome is unknown: {error}"
             ) from error
-        if response.status_code >= 500:
+        if response.status_code >= 500 or response.status_code in {408, 429}:
             TOOL_CALLS.labels(outcome="provider_error").inc()
             raise RetryableToolError(f"provider returned {response.status_code}")
         if response.status_code >= 400:
@@ -96,7 +103,9 @@ class RunService:
     def __init__(self, database: Database):
         self.database = database
 
-    def create_run(self, requested_steps: list[dict]) -> Run:
+    def create_run(
+        self, requested_steps: list[dict], request_key: str | None = None
+    ) -> Run:
         if not requested_steps or any(
             step["tool"] != "record" for step in requested_steps
         ):
@@ -104,9 +113,41 @@ class RunService:
                 "Only one or more idempotent record steps are available in v1"
             )
         with self.database.sessions() as session:
-            run = Run(status="queued")
-            session.add(run)
-            session.flush()
+            if request_key:
+                fingerprint = hashlib.sha256(
+                    json.dumps(
+                        requested_steps,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    ).encode()
+                ).hexdigest()
+                run_id = session.scalar(
+                    insert(Run)
+                    .values(
+                        id=str(uuid4()),
+                        status="queued",
+                        cancellation_requested=False,
+                        request_key=request_key,
+                        request_hash=fingerprint,
+                    )
+                    .on_conflict_do_nothing(index_elements=[Run.request_key])
+                    .returning(Run.id)
+                )
+                if run_id is None:
+                    existing = session.scalar(
+                        select(Run).where(Run.request_key == request_key)
+                    )
+                    if existing.request_hash != fingerprint:
+                        raise IdempotencyConflict(
+                            "Idempotency-Key was used with a different request"
+                        )
+                    return existing
+                run = session.get(Run, run_id)
+            else:
+                run = Run(status="queued")
+                session.add(run)
+                session.flush()
             for position, requested in enumerate(requested_steps, start=1):
                 session.add(
                     Step(
@@ -182,7 +223,10 @@ class RunService:
                 select(Step).where(Step.run_id == run.id).order_by(Step.position)
             ).all()
             events = session.scalars(
-                select(RunEvent).where(RunEvent.run_id == run.id).order_by(RunEvent.id)
+                select(RunEvent)
+                .where(RunEvent.run_id == run.id)
+                .order_by(RunEvent.id)
+                .limit(1000)
             ).all()
             return {
                 "id": run.id,
@@ -210,7 +254,7 @@ class RunService:
                 ],
             }
 
-    def events_since(self, run_id: str, after: int = 0) -> list[dict]:
+    def events_since(self, run_id: str, after: int = 0, limit: int = 100) -> list[dict]:
         with self.database.sessions() as session:
             if not session.get(Run, run_id):
                 raise KeyError(run_id)
@@ -218,6 +262,7 @@ class RunService:
                 select(RunEvent)
                 .where(RunEvent.run_id == run_id, RunEvent.id > after)
                 .order_by(RunEvent.id)
+                .limit(limit)
             ).all()
             return [
                 {
@@ -228,6 +273,68 @@ class RunService:
                 }
                 for item in events
             ]
+
+    def reconcile(self, run_id: str) -> None:
+        """Confirm a provider's persisted effect; never retry an unknown action."""
+        with self.database.sessions() as session:
+            run = session.get(Run, run_id)
+            if run is None:
+                raise KeyError(run_id)
+            if run.status != "needs_review":
+                return
+            step = session.scalar(
+                select(Step).where(Step.run_id == run_id, Step.status == "needs_review")
+            )
+            step_id, key, payload = step.id, step.idempotency_key, step.payload
+        provider = os.environ.get("TOOL_PROVIDER_URL", "http://localhost:8081").rstrip(
+            "/"
+        )
+        with httpx.Client(trust_env=False, timeout=10) as client:
+            response = client.get(f"{provider}/effects/{key}")
+            if response.status_code == 404:
+                raise IdempotencyConflict(
+                    "Provider has no confirmed effect; run remains needs_review"
+                )
+            response.raise_for_status()
+            body = response.json()
+            if not isinstance(body, dict) or not isinstance(body.get("result"), dict):
+                raise ValueError("Provider returned an invalid stored result")
+            result = body["result"]
+        expected = {"recorded": payload, "effect_key": key}
+        if json.dumps(result, sort_keys=True) != json.dumps(expected, sort_keys=True):
+            raise IdempotencyConflict(
+                "Provider effect does not match the original request"
+            )
+        with self.database.sessions() as session:
+            run = session.scalar(select(Run).where(Run.id == run_id).with_for_update())
+            step = session.scalar(
+                select(Step).where(Step.id == step_id).with_for_update()
+            )
+            if run.status != "needs_review" or step.status != "needs_review":
+                return
+            step.status, step.result, step.error = "succeeded", result, None
+            event(session, run_id, "tool_reconciled", {"idempotency_key": key}, step_id)
+            if run.cancellation_requested:
+                run.status = "cancelled"
+            else:
+                remaining = session.scalars(
+                    select(Step).where(
+                        Step.run_id == run_id,
+                        Step.position > step.position,
+                        Step.status == "cancelled",
+                        Step.attempts == 0,
+                    )
+                ).all()
+                for pending in remaining:
+                    pending.status = "queued"
+                run.status = "queued" if remaining else "succeeded"
+            event(
+                session,
+                run_id,
+                "run_resumed" if run.status == "queued" else "run_" + run.status,
+                step_id=step_id,
+            )
+            session.commit()
 
 
 @dataclass(frozen=True)

@@ -33,7 +33,7 @@ effects, while the claim token protects runner state. Neither alone is sufficien
 | Terminal | No change |
 
 Cancellation is not rollback. Needs-review runs retain the stable key and trace so
-an operator can query the provider. Creating a replacement run with a new key may
+an operator can reconcile against the provider's persisted effect. Creating a replacement run with a new key may
 duplicate a prior effect and is not an automatic reconciliation mechanism.
 
 ## Retries and provider contract
@@ -44,7 +44,8 @@ Delay is uniformly sampled between half and all of
 min(cap, base × 2^(attempt - 1)); defaults are base 1 second, cap 30 seconds,
 three attempts. Exceeding that budget ends ambiguous work in needs_review.
 
-4xx provider rejection is terminal. The record provider atomically inserts a
+4xx provider rejection is terminal except for transient 408 and 429 responses.
+The record provider atomically inserts a
 unique idempotency key; a collision compares canonical JSON, returning the existing
 result only when the payload matches. Different payloads receive 409, including
 JSON booleans versus numbers. Effects are stored outside runner transactions.
@@ -66,13 +67,19 @@ frozen against the baseline rather than derived from current ORM definitions.
 Extra legacy tables such as tool_effects are retained. Stop old workers before
 upgrading; rolling mixed-version workers are unsupported.
 
+0003 adds nullable submission keys and request hashes without modifying existing
+runs. A unique submission-key constraint makes concurrent client retries converge
+on one run. Conflicting normalized payloads are rejected. These keys deduplicate
+API submissions; step keys separately deduplicate provider effects.
+
 ## Observability and limits
 
 API and each worker have separate Prometheus registries. Metrics describe
 process-local counters and tool-call duration; database events retain the audit
 history across restarts. Prometheus scraping aggregates process metrics.
 
-The reference service is local-only, unauthenticated, and intentionally sequential.
+The reference service is local-only by default, optionally protected by a single
+operator token, and intentionally sequential within each run.
 It does not establish production throughput, arbitrary exactly-once APIs, or
 model quality. Its AI example scores allowlisted categories, validates proposals,
 and measures classification separately from durable execution.

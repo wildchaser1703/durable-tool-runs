@@ -28,6 +28,23 @@ Read the returned run with `GET /runs/{id}`; resume events with
 `GET /runs/{id}/events?after={event_id}`; cancel with `POST /runs/{id}/cancel`.
 The API serves metrics on port 8000 and the Compose worker on port 9100.
 
+Send an `Idempotency-Key` header when creating a run. Concurrent retries with
+the same key and request return the same run; a different request gets 409.
+Keys remain reserved for as long as their run is retained. Without a key, each
+submission intentionally creates a new run.
+
+Requests are capped at 64 KiB and 20 steps. Event pages default to 100 entries
+(maximum 1,000); advance `after` to the last returned ID until the page is empty.
+Snapshots include the first 1,000 events. Database waits and HTTP concurrency are
+bounded; overload or a database outage can return 503. Retry with the same key.
+
+For a controlled single-operator deployment, set `REQUIRE_AUTH=1` and a random
+`API_TOKEN` of at least 32 characters before starting Compose. Supply
+`Authorization: Bearer <token>` to run and metrics endpoints; Swagger provides an
+Authorize button. Missing required configuration fails startup. Health and API
+documentation remain public. Keep provider, PostgreSQL and worker metrics private,
+and terminate HTTPS at your existing reverse proxy. Default Compose is local-only.
+
 ## What is guaranteed within this boundary
 
 - A new UUID identifies each claim, even when a worker name is reused. Expired or
@@ -41,6 +58,9 @@ The API serves metrics on port 8000 and the Compose worker on port 9100.
   contract; this is not universal exactly-once execution.
 - Cancellation stops queued work. An in-flight effect is not undone. If its
   outcome is unknown, the run ends in `needs_review`, not a false no-effect result.
+- `POST /runs/{id}/reconcile` verifies the original effect at the provider. A
+  matching effect resumes uncancelled work; absent or conflicting effects leave
+  the run untouched. It never blindly re-executes an uncertain action.
 
 ## Validation and development
 
@@ -65,10 +85,10 @@ processes. Containers always connect to the internal database port.
 
 ```sh
 pip install -e '.[ai]'
-python -m examples.triage --api-url http://127.0.0.1:8000 --output evidence/triage.json
+python -m examples.triage --dataset holdout --api-url http://127.0.0.1:8000 --output evidence/triage-current.json
 ```
 
-The pinned, public SmolLM2-135M-Instruct model scores three ticket categories on CPU.
+The default pinned Qwen2.5-1.5B-Instruct model scores three ticket categories on CPU.
 Application code constructs an allowlisted record proposal, validates its schema
 and source ticket ID, submits it, and verifies the persisted effect. Model output
 cannot select arbitrary tools or network destinations. This is constrained
@@ -78,9 +98,10 @@ classification feeding a durable workflow, not an autonomous agent.
 and completed run. The initial prompt's 3/9 result is retained in
 [evidence/triage-baseline.json](evidence/triage-baseline.json). Nine synthetic
 examples show integration behavior, not production model quality.
-The few-shot prompt scored 4/9 with 9/9 workflows completed. Both prompts used
+The initial SmolLM2 few-shot prompt scored 4/9 with 9/9 workflows completed. Both prompts used
 the same development cases; the classifier is not ready for unattended routing.
-Use `--prompt zero-shot` to reproduce the baseline.
+Use `--model smol --prompt zero-shot` to reproduce the baseline. The current
+comparison and separate evaluation are documented in [hardening](docs/hardening.md).
 
 ## Upgrading the earlier prototype
 
@@ -102,8 +123,9 @@ history to repair drift. See [operations](docs/operations.md).
 ## Scope
 
 One PostgreSQL service, sequential record steps, one idempotent provider, and
-bounded recovery. No general DAG planner, authentication, tenant isolation,
-automatic compensation, or production availability/throughput claim.
+bounded recovery. Optional authentication is for one trusted operator, not tenant
+isolation. No DAG planner, automatic compensation, or production availability claim.
+The concurrency check is a bounded local trial, not a capacity benchmark.
 
 [Architecture](docs/architecture.md) · [Case study and evidence](docs/case-study.md)
 · [Verification](docs/verification.md) · [Third-party components](docs/third-party.md)

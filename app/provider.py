@@ -16,6 +16,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
+from app.http_limits import RequestLimits
+
 
 def database_path() -> str:
     return os.environ.get("PROVIDER_DATABASE_PATH", "/tmp/durable-tool-provider.db")
@@ -53,8 +55,9 @@ def create_provider_app() -> FastAPI:
         yield
 
     app = FastAPI(
-        title="Idempotent Record Provider", version="0.2.0", lifespan=lifespan
+        title="Idempotent Record Provider", version="0.3.0", lifespan=lifespan
     )
+    app.add_middleware(RequestLimits, max_bytes=131072)
 
     @app.get("/health")
     def health() -> dict:

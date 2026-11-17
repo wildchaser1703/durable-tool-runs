@@ -1,5 +1,6 @@
 """Assert a real composed run, persisted result, ordered events and metrics."""
 
+import os
 import time
 
 import httpx
@@ -7,7 +8,12 @@ import httpx
 
 def main():
     with httpx.Client(
-        base_url="http://127.0.0.1:8000", timeout=10, trust_env=False
+        base_url="http://127.0.0.1:8000",
+        timeout=10,
+        trust_env=False,
+        headers={"Authorization": "Bearer " + os.environ["API_TOKEN"]}
+        if os.environ.get("API_TOKEN")
+        else {},
     ) as client:
         client.get("/health").raise_for_status()
         response = client.post(

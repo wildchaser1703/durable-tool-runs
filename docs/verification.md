@@ -1,4 +1,6 @@
-# Release verification
+# v0.2 release verification
+
+Historical record for 877c6b4. See [v0.3 verification](hardening.md) for the current release.
 
 Verified in the cloud workspace on 2026-11-17, using PostgreSQL 16, Python 3.12
 and the checked-in Compose topology.

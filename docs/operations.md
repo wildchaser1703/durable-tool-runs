@@ -20,8 +20,13 @@ curl 'http://127.0.0.1:8081/effects/RUN_ID:step:1'
 A matching persisted record establishes the effect occurred. A current 404 alone
 does not prove a disconnected remote attempt can never commit later; stop/reconcile
 that attempt before deciding to re-execute. This release leaves needs_review
-terminal and requires operator reconciliation. It does not automatically issue a
-new key or overwrite audit history.
+unchanged unless POST /runs/{id}/reconcile confirms the original persisted effect.
+That endpoint requires the configured API token. It compares the exact effect key
+and payload, records reconciliation, and resumes unattempted downstream steps
+only if the run was not cancelled. A cancelled run remains cancelled. Missing or
+conflicting provider effects return 409 without mutating history or making a new
+tool call. Repeated reconciliation is harmless. Never create a replacement key
+merely to bypass an uncertain outcome.
 
 ## Upgrade
 
@@ -41,6 +46,16 @@ new workers start. Schema mismatches require investigation; do not delete tables
 or stamp a migration merely to bypass validation. Legacy tool_effects rows are
 retained as historical data and are not silently moved into the new provider.
 
+Application images now run as UID/GID 10001 with read-only root filesystems and
+no Linux capabilities. For an existing provider volume originally owned by root,
+stop the provider and change that volume's ownership to 10001:10001 before first
+starting the new image. New named volumes inherit the image's ownership. Retain
+the provider backup while doing this; do not replace its data directory.
+
+Workers handle SIGTERM/SIGINT by finishing their current attempt and refusing new
+claims. Compose allows 45 seconds for this. A forced kill still uses lease recovery.
+Database connections, statements, locks and pool acquisition have finite timeouts.
+
 A rollback to old application code is unsafe while new workers are running.
 Schema downgrade exists for development tests; the normal recovery path is a
 forward fix with the new worker processes stopped.
@@ -57,8 +72,9 @@ Fault-injection marker/pause options are for controlled experiments only.
 
 ## Local-only boundaries
 
-Bind ports to localhost. There is no authentication or tenant isolation, so this
-configuration is not an Internet-facing deployment. The provider SQLite volume
+Bind ports to localhost. Set REQUIRE_AUTH=1 and API_TOKEN for operator access
+through an HTTPS proxy. This is one trust domain, not tenant isolation; the
+provider and worker metrics must remain private. The provider SQLite volume
 must be retained alongside the runner database. docker compose down without -v
 retains both named stores; do not use destructive volume cleanup on
 data you need.
