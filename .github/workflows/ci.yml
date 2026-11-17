@@ -30,3 +30,13 @@ jobs:
       - run: pytest
         env:
           TEST_DATABASE_URL: postgresql+psycopg://durable:durable@localhost:5432/durable_runs
+      - name: Verify the composed production-shaped stack
+        run: docker compose up -d --build --wait
+      - name: Verify API and worker scrape targets
+        run: |
+          curl --fail --silent http://127.0.0.1:8000/health
+          curl --fail --silent http://127.0.0.1:8000/metrics
+          curl --fail --silent http://127.0.0.1:9100/metrics
+      - name: Tear down stack
+        if: always()
+        run: docker compose down -v

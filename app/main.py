@@ -20,7 +20,6 @@ class CreateRun(BaseModel):
 
 def create_app(database_url: str | None = None) -> FastAPI:
     database = Database(database_url or os.environ.get("DATABASE_URL", "postgresql+psycopg://durable:durable@localhost:5432/durable_runs"))
-    database.create_schema()
     service = RunService(database)
     app = FastAPI(title="Durable Tool Runs", version="0.1.0")
     app.state.database = database
@@ -29,6 +28,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.get("/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics():
+        from app.metrics import render_metrics
+
+        return render_metrics()
 
     @app.post("/runs", status_code=201)
     def create_run(request: CreateRun) -> dict:

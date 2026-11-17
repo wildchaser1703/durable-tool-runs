@@ -40,8 +40,6 @@ class Step(Base):
     result: Mapped[dict | None] = mapped_column(JSON)
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-
 class RunEvent(Base):
     __tablename__ = "run_events"
 
@@ -55,10 +53,4 @@ class RunEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
-class ToolEffect(Base):
-    __tablename__ = "tool_effects"
-
-    idempotency_key: Mapped[str] = mapped_column(String(128), primary_key=True)
-    result: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
+# Tool-provider effects intentionally live outside this runner database.

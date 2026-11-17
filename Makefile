@@ -1,4 +1,4 @@
-.PHONY: db stack test api worker
+.PHONY: db stack test api worker migrate provider
 
 db:
 	docker compose up -d --wait postgres
@@ -10,9 +10,15 @@ test:
 	docker compose --profile test up -d --wait postgres_test
 	TEST_DATABASE_URL=postgresql+psycopg://durable:durable@localhost:5433/durable_runs_test .venv/bin/pytest
 
+migrate:
+	.venv/bin/alembic upgrade head
+
 api:
 	.venv/bin/uvicorn app.main:app --reload
 
 worker:
 	.venv/bin/python -m app.worker
+
+provider:
+	.venv/bin/uvicorn app.provider:app --port 8081
 

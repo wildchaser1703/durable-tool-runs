@@ -13,14 +13,11 @@ class Database:
         self.engine = create_engine(url, future=True, pool_pre_ping=True)
         self.sessions = sessionmaker(self.engine, expire_on_commit=False, class_=Session)
 
-    def create_schema(self) -> None:
-        from app import models  # Ensure metadata includes every model.
-
-        Base.metadata.create_all(self.engine)
-
     def reset_schema(self) -> None:
+        """Test-only teardown. Runtime schema changes go through Alembic."""
         from app import models
 
         Base.metadata.drop_all(self.engine)
-        Base.metadata.create_all(self.engine)
+        with self.engine.begin() as connection:
+            connection.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
 

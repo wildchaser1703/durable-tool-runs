@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import os
+import threading
+import time
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
+import httpx
 from sqlalchemy import and_, exists, or_, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased
 
 from app.database import Database
-from app.models import Run, RunEvent, Step, ToolEffect
+from app.metrics import RUNS_CREATED, STEP_DURATION, STEPS_CLAIMED, TOOL_CALLS
+from app.models import Run, RunEvent, Step
 
 
 class SimulatedWorkerCrash(RuntimeError):
@@ -16,6 +21,10 @@ class SimulatedWorkerCrash(RuntimeError):
 
 class ToolExecutionError(RuntimeError):
     """A terminal v1 tool failure; callers receive an inspectable run result."""
+
+
+class RetryableToolError(RuntimeError):
+    """The remote outcome may be unknown; replay later with the same key."""
 
 
 def now() -> datetime:
@@ -27,31 +36,34 @@ def event(session, run_id: str, kind: str, detail: dict | None = None, step_id: 
 
 
 class RecordTool:
-    """A controlled external effect with idempotency semantics.
+    """HTTP client for an independently persisted idempotent provider."""
 
-    It commits independently from the worker. A crash after this commit but before
-    the worker stores its result is the ambiguity a durable runner must recover from.
-    """
-
-    def __init__(self, database: Database):
-        self.database = database
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip("/")
 
     def execute(self, idempotency_key: str, payload: dict) -> tuple[dict, bool]:
-        result = {"recorded": payload, "effect_key": idempotency_key}
-        with self.database.sessions() as session:
-            existing = session.get(ToolEffect, idempotency_key)
-            if existing:
-                return existing.result, True
-            try:
-                session.add(ToolEffect(idempotency_key=idempotency_key, result=result))
-                session.commit()
-                return result, False
-            except IntegrityError:
-                session.rollback()
-                existing = session.get(ToolEffect, idempotency_key)
-                if not existing:
-                    raise
-                return existing.result, True
+        try:
+            # The provider is an internal service boundary. Do not accidentally
+            # route its hostname through a developer or platform HTTP proxy.
+            with httpx.Client(trust_env=False, timeout=10) as client:
+                response = client.post(
+                    f"{self.base_url}/effects",
+                    json={"idempotency_key": idempotency_key, "payload": payload},
+                )
+        except httpx.HTTPError as error:
+            TOOL_CALLS.labels(outcome="transport_error").inc()
+            raise RetryableToolError(f"provider transport outcome is unknown: {error}") from error
+        if response.status_code >= 500:
+            TOOL_CALLS.labels(outcome="provider_error").inc()
+            raise RetryableToolError(f"provider returned {response.status_code}")
+        if response.status_code >= 400:
+            TOOL_CALLS.labels(outcome="rejected").inc()
+            raise ToolExecutionError(f"provider rejected request with {response.status_code}: {response.text}")
+        body = response.json()
+        if not isinstance(body.get("result"), dict) or not isinstance(body.get("replayed"), bool):
+            raise ToolExecutionError("provider returned an invalid response")
+        TOOL_CALLS.labels(outcome="replayed" if body["replayed"] else "created").inc()
+        return body["result"], body["replayed"]
 
 
 class RunService:
@@ -75,6 +87,7 @@ class RunService:
                 ))
             event(session, run.id, "run_created", {"steps": len(requested_steps)})
             session.commit()
+            RUNS_CREATED.inc()
             return run
 
     def cancel(self, run_id: str) -> Run:
@@ -125,12 +138,23 @@ class RunService:
 
 
 class Worker:
-    def __init__(self, database: Database, worker_id: str, lease_seconds: int = 30, max_attempts: int = 3):
+    def __init__(
+        self,
+        database: Database,
+        worker_id: str,
+        lease_seconds: int = 30,
+        max_attempts: int = 3,
+        provider_url: str | None = None,
+        after_tool_pause_seconds: float = 0,
+        after_tool_marker: str | None = None,
+    ):
         self.database = database
         self.worker_id = worker_id
         self.lease_seconds = lease_seconds
         self.max_attempts = max_attempts
-        self.tool = RecordTool(database)
+        self.tool = RecordTool(provider_url or os.environ.get("TOOL_PROVIDER_URL", "http://localhost:8081"))
+        self.after_tool_pause_seconds = after_tool_pause_seconds
+        self.after_tool_marker = after_tool_marker
 
     def _claim(self) -> tuple[str, str] | None:
         with self.database.sessions() as session:
@@ -171,6 +195,7 @@ class Worker:
                     pending.status = "cancelled"
                 event(session, run.id, "run_failed", {"reason": candidate.error}, candidate.id)
                 session.commit()
+                STEPS_CLAIMED.labels(outcome="attempts_exhausted").inc()
                 return None
             candidate.status = "running"
             candidate.attempts += 1
@@ -179,7 +204,23 @@ class Worker:
             run.status = "running"
             event(session, run.id, "step_reclaimed" if reclaimed else "step_claimed", {"worker": self.worker_id, "attempt": candidate.attempts}, candidate.id)
             session.commit()
+            STEPS_CLAIMED.labels(outcome="reclaimed" if reclaimed else "claimed").inc()
             return candidate.id, candidate.idempotency_key
+
+    def _renew_lease(self, step_id: str) -> bool:
+        with self.database.sessions() as session:
+            step = session.get(Step, step_id)
+            if not step or step.status != "running" or step.lease_owner != self.worker_id:
+                return False
+            step.lease_expires_at = now() + timedelta(seconds=self.lease_seconds)
+            session.commit()
+            return True
+
+    def _heartbeat(self, step_id: str, stop: threading.Event) -> None:
+        interval = max(0.1, self.lease_seconds / 3)
+        while not stop.wait(interval):
+            if not self._renew_lease(step_id):
+                return
 
     def run_once(self, crash_after_tool: bool = False) -> dict | None:
         claim = self._claim()
@@ -189,14 +230,27 @@ class Worker:
         with self.database.sessions() as session:
             step = session.get(Step, step_id)
             payload = step.payload
+        stop_heartbeat = threading.Event()
+        heartbeat = threading.Thread(target=self._heartbeat, args=(step_id, stop_heartbeat), daemon=True)
+        heartbeat.start()
         try:
-            result, replayed = self.tool.execute(idempotency_key, payload)
+            with STEP_DURATION.time():
+                result, replayed = self.tool.execute(idempotency_key, payload)
         except SimulatedWorkerCrash:
             raise
+        except RetryableToolError as error:
+            return self._retry_or_fail(step_id, str(error))
         except Exception as error:
             return self._fail(step_id, str(error))
+        finally:
+            stop_heartbeat.set()
+            heartbeat.join(timeout=1)
         if crash_after_tool:
             raise SimulatedWorkerCrash("worker ended after the external effect committed")
+        if self.after_tool_marker:
+            Path(self.after_tool_marker).touch()
+        if self.after_tool_pause_seconds:
+            time.sleep(self.after_tool_pause_seconds)
         with self.database.sessions() as session:
             step = session.get(Step, step_id)
             run = session.get(Run, step.run_id)
@@ -218,6 +272,30 @@ class Worker:
                 event(session, run.id, "run_succeeded", step_id=step.id)
             session.commit()
             return {"run_id": run.id, "step_id": step.id, "replayed": replayed}
+
+    def _retry_or_fail(self, step_id: str, error: str) -> dict:
+        with self.database.sessions() as session:
+            step = session.get(Step, step_id)
+            run = session.get(Run, step.run_id)
+            if step.lease_owner != self.worker_id:
+                raise RuntimeError("worker no longer owns this lease")
+            if step.attempts >= self.max_attempts:
+                step.status = "failed"
+                step.error = f"attempt budget exhausted: {error}"
+                run.status = "failed"
+                for pending in session.scalars(select(Step).where(Step.run_id == run.id, Step.status == "queued")):
+                    pending.status = "cancelled"
+                event(session, run.id, "run_failed", {"reason": step.error}, step.id)
+                session.commit()
+                return {"run_id": run.id, "step_id": step.id, "failed": True}
+            step.status = "queued"
+            step.error = error
+            step.lease_owner = None
+            step.lease_expires_at = None
+            run.status = "queued"
+            event(session, run.id, "step_retry_scheduled", {"attempt": step.attempts, "reason": error}, step.id)
+            session.commit()
+            return {"run_id": run.id, "step_id": step.id, "retry_scheduled": True}
 
     def _fail(self, step_id: str, error: str) -> dict:
         with self.database.sessions() as session:

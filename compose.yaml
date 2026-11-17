@@ -28,15 +28,40 @@ services:
       timeout: 3s
       retries: 20
 
+  provider:
+    build: .
+    command: uvicorn app.provider:app --host 0.0.0.0 --port 8081
+    environment:
+      PROVIDER_DATABASE_PATH: /data/effects.db
+    volumes:
+      - provider_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      DATABASE_URL: postgresql+psycopg://durable:durable@postgres:5432/durable_runs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   api:
     build: .
     environment:
       DATABASE_URL: postgresql+psycopg://durable:durable@postgres:5432/durable_runs
+      TOOL_PROVIDER_URL: http://provider:8081
     ports:
       - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 2s
@@ -48,8 +73,19 @@ services:
     command: python -m app.worker
     environment:
       DATABASE_URL: postgresql+psycopg://durable:durable@postgres:5432/durable_runs
+      TOOL_PROVIDER_URL: http://provider:8081
       WORKER_ID: compose-worker
+      METRICS_PORT: "9100"
+    ports:
+      - "9100:9100"
     depends_on:
       postgres:
         condition: service_healthy
+      provider:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  provider_data:
 

@@ -1,8 +1,9 @@
 FROM python:3.12-slim
 
 WORKDIR /service
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md alembic.ini ./
 COPY app ./app
+COPY alembic ./alembic
 # Some managed build environments inject an HTTPS proxy. Its CA is supplied at
 # build time only; ordinary local Docker builds leave this argument empty.
 ARG ENVIRONMENT_PROXY_CA=""
