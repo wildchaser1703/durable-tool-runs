@@ -32,6 +32,8 @@ jobs:
           TEST_DATABASE_URL: postgresql+psycopg://durable:durable@localhost:5432/durable_runs
       - name: Verify the composed production-shaped stack
         run: docker compose up -d --build --wait
+        env:
+          POSTGRES_PORT: "5434"
       - name: Verify API and worker scrape targets
         run: |
           curl --fail --silent http://127.0.0.1:8000/health

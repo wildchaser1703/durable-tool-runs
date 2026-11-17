@@ -5,6 +5,7 @@ import argparse
 import time
 
 from prometheus_client import start_http_server
+from sqlalchemy.exc import OperationalError
 
 from app.database import Database
 from app.service import Worker
@@ -30,7 +31,14 @@ def main() -> None:
         worker.run_once()
         return
     while True:
-        if not worker.run_once():
+        try:
+            outcome = worker.run_once()
+        except OperationalError:
+            # A database restart must not permanently remove a worker from the
+            # pool. The lease protocol handles any work it had previously held.
+            time.sleep(1)
+            continue
+        if not outcome:
             time.sleep(0.25)
 
 
