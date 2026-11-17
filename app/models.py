@@ -43,7 +43,9 @@ class Step(Base):
 class RunEvent(Base):
     __tablename__ = "run_events"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    # A database sequence, rather than a timestamp or UUID, establishes the
+    # order in which clients replay events emitted in the same transaction.
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), nullable=False, index=True)
     step_id: Mapped[str | None] = mapped_column(ForeignKey("steps.id", ondelete="SET NULL"))
     kind: Mapped[str] = mapped_column(String(80), nullable=False)

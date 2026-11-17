@@ -90,7 +90,7 @@ class RunService:
             if not run:
                 raise KeyError(run_id)
             steps = session.scalars(select(Step).where(Step.run_id == run.id).order_by(Step.created_at)).all()
-            events = session.scalars(select(RunEvent).where(RunEvent.run_id == run.id).order_by(RunEvent.created_at, RunEvent.id)).all()
+            events = session.scalars(select(RunEvent).where(RunEvent.run_id == run.id).order_by(RunEvent.id)).all()
             return {
                 "id": run.id,
                 "status": run.status,
