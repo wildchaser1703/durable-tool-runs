@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.database import Database
 from app.service import RunService
 
 
-class CreateRun(BaseModel):
+class RequestedStep(BaseModel):
     tool: str = Field(default="record")
     payload: dict
+
+
+class CreateRun(BaseModel):
+    steps: list[RequestedStep] = Field(min_length=1, max_length=20)
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -29,7 +33,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.post("/runs", status_code=201)
     def create_run(request: CreateRun) -> dict:
         try:
-            run = service.create_run(request.tool, request.payload)
+            run = service.create_run([step.model_dump() for step in request.steps])
         except ValueError as error:
             raise HTTPException(status_code=400, detail=str(error)) from error
         return service.snapshot(run.id)
@@ -38,6 +42,13 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def get_run(run_id: str) -> dict:
         try:
             return service.snapshot(run_id)
+        except KeyError as error:
+            raise HTTPException(status_code=404, detail="Run not found") from error
+
+    @app.get("/runs/{run_id}/events")
+    def get_events(run_id: str, after: int = Query(default=0, ge=0)) -> dict:
+        try:
+            return {"events": service.events_since(run_id, after)}
         except KeyError as error:
             raise HTTPException(status_code=404, detail="Run not found") from error
 
