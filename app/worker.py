@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import os
 import argparse
+import os
 import time
+from uuid import uuid4
 
 from prometheus_client import start_http_server
 from sqlalchemy.exc import OperationalError
@@ -13,14 +14,23 @@ from app.service import Worker
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run a durable-tool-runs worker")
-    parser.add_argument("--once", action="store_true", help="claim and execute at most one step")
+    parser.add_argument(
+        "--once", action="store_true", help="claim and execute at most one step"
+    )
     args = parser.parse_args()
-    database = Database(os.environ.get("DATABASE_URL", "postgresql+psycopg://durable:durable@localhost:5432/durable_runs"))
+    database = Database(
+        os.environ.get(
+            "DATABASE_URL",
+            "postgresql+psycopg://durable:durable@localhost:5432/durable_runs",
+        )
+    )
     worker = Worker(
         database,
-        worker_id=os.environ.get("WORKER_ID", "worker-1"),
+        worker_id=os.environ.get("WORKER_ID", f"worker-{uuid4()}"),
         lease_seconds=int(os.environ.get("LEASE_SECONDS", "30")),
         max_attempts=int(os.environ.get("MAX_ATTEMPTS", "3")),
+        retry_base_seconds=float(os.environ.get("RETRY_BASE_SECONDS", "1")),
+        retry_cap_seconds=float(os.environ.get("RETRY_CAP_SECONDS", "30")),
         after_tool_pause_seconds=float(os.environ.get("AFTER_TOOL_PAUSE_SECONDS", "0")),
         after_tool_marker=os.environ.get("AFTER_TOOL_MARKER"),
     )
@@ -44,4 +54,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

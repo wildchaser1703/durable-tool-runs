@@ -1,0 +1,212 @@
+{
+  "model": "HuggingFaceTB/SmolLM2-135M-Instruct",
+  "revision": "12fd25f77366fa6b3b4b768ec3050bf629380bac",
+  "prompt": "zero-shot",
+  "device": "cpu",
+  "python": "3.12.14",
+  "torch": "2.5.1+cpu",
+  "method": "constrained candidate-label scoring, not a free-form agent",
+  "cases": 9,
+  "correct": 3,
+  "scope": "Nine synthetic examples for integration, not a production-quality estimate.",
+  "results": [
+    {
+      "ticket_id": "T01",
+      "text": "I was charged twice for this month's subscription.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.5169472694396973,
+        "access": -4.151988506317139,
+        "other": -5.3705267906188965
+      },
+      "validated": true,
+      "run": {
+        "id": "ce323824-c8b9-40c0-869f-59512c7e42f2",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T02",
+      "text": "My payment failed although my card is valid.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.9576048851013184,
+        "access": -4.7799272537231445,
+        "other": -6.400296211242676
+      },
+      "validated": true,
+      "run": {
+        "id": "276476b5-1c2c-43fd-a642-13b97f39acd4",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T03",
+      "text": "Please send a copy of the invoice for my last payment.",
+      "expected": "billing",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.8377680778503418,
+        "access": -6.090502738952637,
+        "other": -5.948481559753418
+      },
+      "validated": true,
+      "run": {
+        "id": "551dfd08-908c-4c46-8130-00f9504c9f79",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T04",
+      "text": "I forgot my password and cannot sign in.",
+      "expected": "access",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.6389563083648682,
+        "access": -3.2412121295928955,
+        "other": -5.284186363220215
+      },
+      "validated": true,
+      "run": {
+        "id": "e0e0d988-a41a-431c-bfdf-8dc1d817f312",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T05",
+      "text": "My login verification code never arrives.",
+      "expected": "access",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.691354751586914,
+        "access": -3.4821062088012695,
+        "other": -6.151808738708496
+      },
+      "validated": true,
+      "run": {
+        "id": "c7dbb679-a59c-4932-a8a5-ef3ca686b9ff",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T06",
+      "text": "My account is locked after several sign-in attempts.",
+      "expected": "access",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.875604510307312,
+        "access": -4.764832496643066,
+        "other": -7.046490669250488
+      },
+      "validated": true,
+      "run": {
+        "id": "e7c9d1cc-647c-4754-8ff9-011856ca2a53",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T07",
+      "text": "Could you add a dark theme to the dashboard?",
+      "expected": "other",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -2.3775124549865723,
+        "access": -6.8343610763549805,
+        "other": -9.695094108581543
+      },
+      "validated": true,
+      "run": {
+        "id": "7cb7e030-365f-4eb2-9242-a46fe4faf5ed",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T08",
+      "text": "Where can I read the documentation about exporting reports?",
+      "expected": "other",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.7488988637924194,
+        "access": -5.865390777587891,
+        "other": -8.668550491333008
+      },
+      "validated": true,
+      "run": {
+        "id": "4d396f61-390c-46f7-b224-bd20cd2d9ce5",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    },
+    {
+      "ticket_id": "T09",
+      "text": "The chart colours are difficult to distinguish.",
+      "expected": "other",
+      "predicted": "billing",
+      "mean_log_probabilities": {
+        "billing": -1.6805788278579712,
+        "access": -4.120570182800293,
+        "other": -5.3674516677856445
+      },
+      "validated": true,
+      "run": {
+        "id": "d2665605-9068-4121-a340-23cb6a0c8f7b",
+        "status": "succeeded",
+        "events": [
+          "run_created",
+          "step_claimed",
+          "tool_effect_created",
+          "run_succeeded"
+        ]
+      }
+    }
+  ]
+}

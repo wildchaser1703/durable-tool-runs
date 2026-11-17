@@ -3,15 +3,14 @@ from __future__ import annotations
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from app.database import Base
+from alembic import context
 from app import models  # noqa: F401 - register model metadata
-
+from app.database import Base
 
 config = context.config
-if os.environ.get("DATABASE_URL"):
+if os.environ.get("DATABASE_URL") and not config.attributes.get("explicit_url"):
     config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

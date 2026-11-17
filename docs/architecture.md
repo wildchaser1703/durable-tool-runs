@@ -1,45 +1,78 @@
-# Architecture decisions
+# Architecture and failure boundaries
 
-## PostgreSQL is both the state store and the work queue
+HTTP API → PostgreSQL (runs, steps, events) → workers → HTTP provider → SQLite effects.
 
-`runs`, `steps`, and `run_events` are persisted in PostgreSQL. Workers claim a step with `SELECT … FOR UPDATE SKIP LOCKED`, commit a lease, and execute outside that lease transaction. Schema changes are applied through Alembic before API and worker containers start.
+## Claims and lock order
 
-This keeps the recovery record and the work-selection record together. A separate queue would improve throughput at a larger scale, but would create another delivery boundary to reason about. The v1 tradeoff is deliberate: one inspectable database is easier to recover and test.
+Every claim receives a UUID token independent of the human-readable worker ID.
+Claiming locks a runnable Run with FOR UPDATE SKIP LOCKED, then its next Step.
+Completion, failure and cancellation acquire locks in the same Run → Step order.
+This reduces parallelism within a run deliberately: v1 steps are sequential.
 
-## Leases recover worker loss
+Before a terminal or retry update, the worker verifies the claim token, running
+state, and lease expiry while holding both locks. Lease renewal is a conditional
+SQL UPDATE on the same token, state and unexpired lease. All lease decisions use
+PostgreSQL clock_timestamp(), avoiding differences between worker clocks. An
+expired claim cannot renew itself, even before a replacement arrives.
 
-A `running` step has an owner and an expiry. A new worker may reclaim it after expiry. A worker never assumes that an in-memory task survived a restart.
+A heartbeat covers the HTTP call and result persistence. If the database becomes
+unavailable, renewal can resume only while the lease is still live. The worker
+poll loop tolerates database restart. The replacement worker may call a provider
+while a stale process is still running: the provider's idempotency key protects
+effects, while the claim token protects runner state. Neither alone is sufficient.
 
-Expiry is not a success signal. Each step has a bounded attempt budget. After that budget is exhausted, the run becomes `failed`; downstream queued steps are cancelled and the event trail records the reason.
+## Cancellation
 
-A heartbeat renews the lease while an active worker waits for a tool response. This prevents a healthy slow call from being reclaimed simply because its initial lease elapsed. A permanently stuck worker still stops heartbeating and becomes reclaimable.
+| State at cancellation | Result |
+|---|---|
+| Queued, never attempted | Cancelled, no call starts |
+| Running | Cancelling; wait for known outcome or lease expiry |
+| Running, provider confirms effect | Step succeeded, run cancelled, later steps cancelled |
+| Running, provider explicitly rejects | Cancelled with recorded rejection |
+| Lost response, expired running claim, or pending ambiguous retry | Needs review; no automatic new call |
+| Terminal | No change |
 
-## Idempotency is the external-effect boundary
+Cancellation is not rollback. Needs-review runs retain the stable key and trace so
+an operator can query the provider. Creating a replacement run with a new key may
+duplicate a prior effect and is not an automatic reconciliation mechanism.
 
-The record provider is a separate HTTP process with its own durable SQLite store. That exposes the important crash window:
+## Retries and provider contract
 
-1. A worker claims a step.
-2. The tool commits an effect.
-3. The worker dies before it stores the tool result.
-4. Another worker reclaims the expired lease.
+Transport errors, 5xx replies, malformed success responses and unexpected adapter
+failures are ambiguous. Replay uses the same key and persisted available_at time.
+Delay is uniformly sampled between half and all of
+min(cap, base × 2^(attempt - 1)); defaults are base 1 second, cap 30 seconds,
+three attempts. Exceeding that budget ends ambiguous work in needs_review.
 
-The replacement worker calls the provider with the same stable key, `run_id:step:position`. The provider returns the earlier result instead of creating a second effect. The integration suite starts a real worker subprocess, waits until it has received that response, kills it, waits for its lease to expire, and lets a second worker reclaim the step.
+4xx provider rejection is terminal. The record provider atomically inserts a
+unique idempotency key; a collision compares canonical JSON, returning the existing
+result only when the payload matches. Different payloads receive 409, including
+JSON booleans versus numbers. Effects are stored outside runner transactions.
 
-This provides effectively-once effects only for tools with an idempotency contract. No database transaction can make an arbitrary remote API exactly-once. Transport failures and provider 5xx responses are ambiguous, so the runner retries them using the original key; provider 4xx responses are terminal. A real non-idempotent provider needs a compensating action or a `needs_review` state; it must not be silently retried.
+## Events and snapshots
 
-## Operational signals
+A database sequence orders event IDs, but a sequence alone does not establish
+commit order. Every writer holds the Run lock while allocating and committing
+events, so readers cannot skip a late-committing lower ID within that run.
+Snapshots take a shared Run lock while reading run, steps and events. Cursors
+are per-run; no global cross-run ordering guarantee is made.
 
-Metrics are intentionally process-local, as Prometheus expects. The API exposes accepted runs at `/metrics`; every worker exposes its own `/metrics` target with claim/reclaim outcomes, provider-call outcomes, and a step-execution duration histogram. Structured events remain the per-run diagnostic trace; metrics expose fleet-level health.
+## Schema evolution
 
-## Events are replayable, not merely logs
+0001 can create a new schema or validate the exact original prototype layout.
+0002 validates the baseline again (including databases previously stamped by
+the permissive migration), then adds claim_token and available_at. Validation is
+frozen against the baseline rather than derived from current ORM definitions.
+Extra legacy tables such as tool_effects are retained. Stop old workers before
+upgrading; rolling mixed-version workers are unsupported.
 
-Each event receives a monotonic database sequence. A reconnecting client uses `GET /runs/{id}/events?after={event_id}` to fetch only events it has not observed. UUIDs and timestamps do not define a reliable causal order when events are committed in the same transaction.
+## Observability and limits
 
-## Explicit non-goals for v1
+API and each worker have separate Prometheus registries. Metrics describe
+process-local counters and tool-call duration; database events retain the audit
+history across restarts. Prometheus scraping aggregates process metrics.
 
-- No model provider, prompt planner, vector database, or agent framework.
-- No authentication or multi-tenant isolation.
-- No general DAG scheduler; steps run in persisted sequence.
-- No claim of production throughput or availability.
-
-The point of this repository is the durable boundary beneath those systems: a tool effect, a persisted result, and a recovery story that can be tested.
+The reference service is local-only, unauthenticated, and intentionally sequential.
+It does not establish production throughput, arbitrary exactly-once APIs, or
+model quality. Its AI example scores allowlisted categories, validates proposals,
+and measures classification separately from durable execution.

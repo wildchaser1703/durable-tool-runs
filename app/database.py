@@ -11,13 +11,14 @@ class Base(DeclarativeBase):
 class Database:
     def __init__(self, url: str):
         self.engine = create_engine(url, future=True, pool_pre_ping=True)
-        self.sessions = sessionmaker(self.engine, expire_on_commit=False, class_=Session)
+        self.sessions = sessionmaker(
+            self.engine, expire_on_commit=False, class_=Session
+        )
 
     def reset_schema(self) -> None:
         """Test-only teardown. Runtime schema changes go through Alembic."""
-        from app import models
+        from app import models  # noqa: F401 - registers the complete metadata
 
         Base.metadata.drop_all(self.engine)
         with self.engine.begin() as connection:
             connection.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
-

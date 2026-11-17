@@ -4,12 +4,13 @@ Its SQLite database is intentionally independent from the runner's PostgreSQL
 database. The HTTP boundary means a worker can lose its process after the
 provider commits, before the runner records the result.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import sqlite3
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -46,15 +47,19 @@ class RecordRequest(BaseModel):
 
 
 def create_provider_app() -> FastAPI:
-    app = FastAPI(title="Idempotent Record Provider", version="0.1.0")
-
-    @app.on_event("startup")
-    def startup() -> None:
+    @asynccontextmanager
+    async def lifespan(app):
         initialize()
+        yield
+
+    app = FastAPI(
+        title="Idempotent Record Provider", version="0.2.0", lifespan=lifespan
+    )
 
     @app.get("/health")
     def health() -> dict:
-        initialize()
+        with closing(connection()) as conn:
+            conn.execute("SELECT 1 FROM effects LIMIT 1")
         return {"status": "ok"}
 
     @app.post("/effects")
@@ -70,17 +75,26 @@ def create_provider_app() -> FastAPI:
                 return {"result": result, "replayed": False}
             except sqlite3.IntegrityError:
                 row = conn.execute(
-                    "SELECT result_json FROM effects WHERE idempotency_key = ?", (request.idempotency_key,)
+                    "SELECT result_json FROM effects WHERE idempotency_key = ?",
+                    (request.idempotency_key,),
                 ).fetchone()
                 if not row:
                     raise
+                if json.dumps(
+                    json.loads(row[0]), sort_keys=True, separators=(",", ":")
+                ) != json.dumps(result, sort_keys=True, separators=(",", ":")):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Idempotency key was already used with a different payload",
+                    )
                 return {"result": json.loads(row[0]), "replayed": True}
 
     @app.get("/effects/{idempotency_key}")
     def effect(idempotency_key: str) -> dict:
         with closing(connection()) as conn:
             row = conn.execute(
-                "SELECT result_json, created_at FROM effects WHERE idempotency_key = ?", (idempotency_key,)
+                "SELECT result_json, created_at FROM effects WHERE idempotency_key = ?",
+                (idempotency_key,),
             ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Effect not found")

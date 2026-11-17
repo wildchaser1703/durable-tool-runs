@@ -3,14 +3,12 @@ FROM python:3.12-slim
 WORKDIR /service
 COPY pyproject.toml README.md alembic.ini ./
 COPY app ./app
+COPY examples ./examples
 COPY alembic ./alembic
-# Some managed build environments inject an HTTPS proxy. Its CA is supplied at
-# build time only; ordinary local Docker builds leave this argument empty.
-ARG ENVIRONMENT_PROXY_CA=""
-RUN if [ -n "$ENVIRONMENT_PROXY_CA" ]; then \
-      printf '%s\n' "$ENVIRONMENT_PROXY_CA" > /usr/local/share/ca-certificates/environment-proxy-ca.crt && \
-      update-ca-certificates; \
-    fi && \
-    pip install --no-cache-dir .
+# Optional cloud trust bundle is not persisted in the image or build arguments.
+RUN --mount=type=secret,id=build_ca \
+    if [ -f /run/secrets/build_ca ]; then \
+      PIP_CERT=/run/secrets/build_ca pip install --no-cache-dir .; \
+    else pip install --no-cache-dir .; fi
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,14 @@
+{
+  "status": "passed",
+  "run_id": "b9562416-c744-44d4-94a3-dda15580d5fc",
+  "steps": [
+    "succeeded",
+    "succeeded"
+  ],
+  "browser_errors": [],
+  "external_asset_requests": [],
+  "viewports": [
+    "1440x1000",
+    "390x844"
+  ]
+}

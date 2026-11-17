@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.database import Database
 from app.service import RunService
@@ -19,14 +23,40 @@ class CreateRun(BaseModel):
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
-    database = Database(database_url or os.environ.get("DATABASE_URL", "postgresql+psycopg://durable:durable@localhost:5432/durable_runs"))
+    database = Database(
+        database_url
+        or os.environ.get(
+            "DATABASE_URL",
+            "postgresql+psycopg://durable:durable@localhost:5432/durable_runs",
+        )
+    )
     service = RunService(database)
-    app = FastAPI(title="Durable Tool Runs", version="0.1.0")
+    app = FastAPI(
+        title="Durable Tool Runs", version="0.2.0", docs_url=None, redoc_url=None
+    )
+    app.mount(
+        "/docs-assets",
+        StaticFiles(directory=Path(__file__).parent / "static"),
+        name="docs-assets",
+    )
+
+    @app.get("/docs", include_in_schema=False)
+    def documentation():
+        return get_swagger_ui_html(
+            openapi_url="/openapi.json",
+            title="Durable Tool Runs API",
+            swagger_js_url="/docs-assets/swagger-ui-bundle.js",
+            swagger_css_url="/docs-assets/swagger-ui.css",
+            swagger_favicon_url="/docs-assets/favicon-32x32.png",
+        )
+
     app.state.database = database
     app.state.service = service
 
     @app.get("/health")
     def health() -> dict:
+        with database.engine.connect() as connection:
+            connection.execute(text("SELECT 1 FROM runs LIMIT 1"))
         return {"status": "ok"}
 
     @app.get("/metrics", include_in_schema=False)
@@ -69,4 +99,3 @@ def create_app(database_url: str | None = None) -> FastAPI:
 
 
 app = create_app()
-

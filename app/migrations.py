@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from alembic import command
 from alembic.config import Config
+
+from alembic import command
 
 
 def upgrade_database(database_url: str) -> None:
@@ -16,4 +17,5 @@ def upgrade_database(database_url: str) -> None:
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     config.set_main_option("sqlalchemy.url", database_url)
+    config.attributes["explicit_url"] = True
     command.upgrade(config, "head")

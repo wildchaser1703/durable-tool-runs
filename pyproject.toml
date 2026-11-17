@@ -1,6 +1,6 @@
 [project]
 name = "durable-tool-runs"
-version = "0.1.0"
+version = "0.2.0"
 description = "A recoverable execution service for durable tool runs."
 requires-python = ">=3.11"
 dependencies = [
@@ -14,12 +14,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.3,<9"]
+dev = ["pytest>=8.3,<9", "ruff>=0.9,<1"]
+ai = ["torch>=2.5,<3", "transformers>=4.48,<5"]
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "examples*"]
+
+[tool.setuptools.package-data]
+app = ["static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
 

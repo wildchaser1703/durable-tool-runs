@@ -1,0 +1,13 @@
+{
+  "status": "passed",
+  "operation": "docker compose down then up --wait; no volume deletion",
+  "run_id": "fd47d73c-ad74-4a42-be42-2cfc44c8b2a1",
+  "runner_snapshot_preserved": true,
+  "provider_effect_preserved": true,
+  "anonymous_volume_migration": {
+    "runs_before": 47,
+    "runs_after": 47,
+    "sorted_run_id_md5": "2c6ccae755af3e0bc5b34285c8514996",
+    "backup_retained": true
+  }
+}

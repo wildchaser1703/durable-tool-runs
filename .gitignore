@@ -9,3 +9,6 @@ htmlcov/
 *.log
 *.egg-info/
 .env
+.ruff_cache/
+build/
+dist/
